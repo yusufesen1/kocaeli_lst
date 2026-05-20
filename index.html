@@ -1,0 +1,1680 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+
+    <link rel="stylesheet" href="./resources/ol.css">
+    <link rel="stylesheet" href="resources/fontawesome-all.min.css">
+    <link href="resources/photon-geocoder-autocomplete.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="./resources/ol-layerswitcher.css">
+    <link rel="stylesheet" href="./resources/qgis2web.css">
+
+    <title>Gebze Kentsel Isı Adası Analizi · 2016–2025</title>
+
+    <style>
+      /* ── Design tokens ──────────────────────────────────────── */
+      :root {
+        --accent:         #e85d04;
+        --accent-glow:    rgba(232, 93, 4, 0.14);
+        --accent-border:  rgba(232, 93, 4, 0.32);
+        --accent-dim:     rgba(232, 93, 4, 0.08);
+        --green:          #4ade80;
+        --green-glow:     rgba(74, 222, 128, 0.12);
+        --blue:           #60a5fa;
+        --blue-glow:      rgba(96, 165, 250, 0.12);
+        --bg-base:        #1a1a1a;
+        --bg-surface:     #212121;
+        --bg-elevated:    #2a2a2a;
+        --bg-hover:       #333333;
+        --border:         #303030;
+        --border-light:   #3d3d3d;
+        --text-primary:   #f0f0f0;
+        --text-secondary: #9e9e9e;
+        --text-muted:     #5a5a5a;
+        --sidebar-w:      300px;
+        --header-h:       48px;
+        --font: 'Inter', system-ui, -apple-system, BlinkMacSystemFont,
+                'Segoe UI', sans-serif;
+        --radius:         6px;
+        --ease:           cubic-bezier(0.4, 0, 0.2, 1);
+        --dur:            0.27s;
+      }
+
+      /* ── Reset ──────────────────────────────────────────────── */
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      html, body {
+        width: 100%; height: 100%;
+        background: var(--bg-base);
+        color: var(--text-primary);
+        font-family: var(--font);
+        font-size: 13px;
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      /* ── App shell ──────────────────────────────────────────── */
+      #app-root  { display: flex; flex-direction: column; height: 100vh; }
+      #app-body  { display: flex; flex: 1; overflow: hidden; }
+
+      /* ── Header ─────────────────────────────────────────────── */
+      #app-header {
+        height: var(--header-h);
+        background: #111;
+        border-bottom: 1px solid var(--border);
+        display: flex; align-items: center;
+        padding: 0 18px; gap: 11px;
+        flex-shrink: 0; z-index: 300;
+      }
+
+      #hdr-stripe {
+        width: 3px; height: 22px; border-radius: 2px; flex-shrink: 0;
+        background: linear-gradient(180deg, #f44b0a 0%, #e85d04 55%, #d97706 100%);
+      }
+
+      #hdr-brand { display: flex; flex-direction: column; gap: 1px; flex: 1; min-width: 0; }
+
+      .hdr-title {
+        font-size: 13.5px; font-weight: 600; color: var(--text-primary);
+        letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+
+      .hdr-sub { font-size: 10.5px; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+
+      #hdr-badge {
+        flex-shrink: 0; background: var(--accent-glow); border: 1px solid var(--accent-border);
+        color: var(--accent); font-size: 10px; font-weight: 700;
+        padding: 3px 9px; border-radius: 4px; letter-spacing: 0.07em; text-transform: uppercase;
+      }
+
+      /* ── Sidebar ─────────────────────────────────────────────── */
+      #sidebar {
+        width: var(--sidebar-w); background: var(--bg-surface);
+        border-right: 1px solid var(--border);
+        display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden;
+        transition: width var(--dur) var(--ease), border-right-width var(--dur) var(--ease);
+        z-index: 100;
+      }
+
+      #sidebar.collapsed { width: 0; border-right-width: 0; }
+
+      #sidebar-inner {
+        width: var(--sidebar-w); height: 100%;
+        display: flex; flex-direction: column; flex-shrink: 0; overflow: hidden;
+      }
+
+      #sidebar-head {
+        padding: 13px 16px 11px; border-bottom: 1px solid var(--border);
+        flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+      }
+
+      #sidebar-head-title {
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.1em; color: var(--text-muted); flex: 1;
+      }
+
+      #sidebar-body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 14px 0 8px; }
+
+      #sidebar-body::-webkit-scrollbar { width: 3px; }
+      #sidebar-body::-webkit-scrollbar-track { background: transparent; }
+      #sidebar-body::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+
+      #sidebar-foot { padding: 10px 16px; border-top: 1px solid var(--border); flex-shrink: 0; }
+      .foot-text { font-size: 10px; line-height: 1.7; color: var(--text-muted); }
+      .foot-text strong { color: var(--text-secondary); font-weight: 600; }
+
+      /* ── Control sections ───────────────────────────────────── */
+      .ctrl-section { padding: 0 16px; margin-bottom: 14px; }
+
+      .ctrl-label {
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.1em; color: var(--text-muted);
+        margin-bottom: 8px; padding-left: 1px;
+        display: flex; align-items: center; gap: 6px;
+      }
+
+      .ctrl-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+      /* ── Segmented radio buttons ─────────────────────────────── */
+      .seg-group { display: flex; gap: 5px; }
+      .seg-opt { flex: 1; position: relative; }
+
+      .seg-opt input[type='radio'] {
+        position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;
+      }
+
+      .seg-opt label {
+        display: block; text-align: center; padding: 7px 4px;
+        border-radius: var(--radius); border: 1px solid var(--border-light);
+        background: var(--bg-elevated); color: var(--text-muted);
+        font-size: 12px; font-weight: 500; cursor: pointer;
+        transition: background var(--dur), color var(--dur), border-color var(--dur);
+        user-select: none; white-space: nowrap;
+      }
+
+      .seg-opt label:hover { background: var(--bg-hover); color: var(--text-secondary); }
+
+      .seg-group.lst-group  .seg-opt input:checked + label { background: var(--accent-glow);  border-color: var(--accent-border);           color: var(--accent); font-weight: 600; }
+      .seg-group.ndvi-group .seg-opt input:checked + label { background: var(--green-glow);   border-color: rgba(74,222,128,.30);            color: var(--green);  font-weight: 600; }
+      .seg-group.ndbi-group .seg-opt input:checked + label { background: var(--blue-glow);    border-color: rgba(96,165,250,.30);            color: var(--blue);   font-weight: 600; }
+      .seg-group.metrik-group .seg-opt input:checked + label { background: var(--accent-glow); border-color: var(--accent-border); color: var(--accent); font-weight: 600; }
+      #yil-group .seg-opt input:checked + label { background: var(--accent-glow); border-color: var(--accent-border); color: var(--accent); font-weight: 600; }
+
+      /* ── Export button ───────────────────────────────────────── */
+      #export-btn {
+        position: absolute; top: 46px; right: 8px; z-index: 100;
+        width: 28px; height: 28px; border-radius: 50%;
+        background: var(--bg-elevated); border: 1px solid var(--border-light);
+        color: var(--text-secondary); cursor: pointer; font-size: 13px;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .15s, color .15s, border-color .15s;
+      }
+      #export-btn:hover { background: var(--bg-elevated); color: #4ade80; border-color: rgba(74,222,128,.4); }
+      #export-btn.flash { background: rgba(74,222,128,.15); color: #4ade80; border-color: rgba(74,222,128,.4); }
+
+      #screenshot-btn {
+        position: absolute; top: 80px; right: 8px; z-index: 100;
+        width: 28px; height: 28px; border-radius: 50%;
+        background: var(--bg-elevated); border: 1px solid var(--border-light);
+        color: var(--text-secondary); cursor: pointer; font-size: 13px;
+        display: flex; align-items: center; justify-content: center;
+        transition: background .15s, color .15s, border-color .15s;
+      }
+      #screenshot-btn:hover { color: #60a5fa; border-color: rgba(96,165,250,.4); }
+      #screenshot-btn.flash { background: rgba(96,165,250,.15); color: #60a5fa; border-color: rgba(96,165,250,.4); }
+
+      /* ── Stats card ─────────────────────────────────────────── */
+      .stats-card { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+      .stats-row { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--border); }
+      .stats-row:last-child { border-bottom: none; }
+      .stats-lbl { font-size: 11px; color: var(--text-secondary); }
+      .stats-val { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+      #stat-count { font-weight: 400; font-size: 10px; color: var(--text-secondary); margin-left: 6px; }
+
+      /* ── Filter card ─────────────────────────────────────────── */
+      .filter-card { background: var(--bg-hover); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+      .filter-row { display: flex; align-items: center; gap: 8px; }
+      .filter-lbl { font-size: 11px; color: var(--text-secondary); width: 28px; flex-shrink: 0; }
+      .filter-row input[type='number'] { flex: 1; background: var(--bg-base); border: 1px solid var(--border); border-radius: 5px; color: var(--text-primary); font-size: 12px; padding: 5px 8px; outline: none; font-family: inherit; -moz-appearance: textfield; }
+      .filter-row input[type='number']::-webkit-inner-spin-button { display: none; }
+      .filter-row input[type='number']:focus { border-color: var(--accent-border); }
+      .filter-unit { font-size: 11px; color: var(--text-secondary); width: 16px; flex-shrink: 0; }
+      #filter-reset { align-self: flex-end; background: transparent; border: 1px solid var(--border); border-radius: 5px; color: var(--text-secondary); cursor: pointer; font-size: 11px; padding: 4px 10px; transition: border-color .15s, color .15s; }
+      #filter-reset:hover { border-color: var(--accent-border); color: var(--accent); }
+      .filter-active-note { font-size: 10px; color: var(--accent); margin-top: 2px; display: none; }
+      .filter-active-note.visible { display: block; }
+
+      /* ── Scale bar (OL override) ─────────────────────────────── */
+      .ol-scale-line { background: rgba(26,26,26,0.82) !important; border: 1px solid rgba(255,255,255,0.15) !important; border-radius: 4px; padding: 3px 8px 5px !important; bottom: 36px !important; left: 10px !important; }
+      .ol-scale-line-inner { border: 1.5px solid rgba(255,255,255,0.5) !important; border-top: none !important; color: rgba(255,255,255,0.6) !important; font-size: 10px !important; font-family: inherit !important; text-align: center; }
+
+      /* ── North arrow ─────────────────────────────────────────── */
+      #north-arrow {
+        position: absolute; bottom: 82px; left: 10px; z-index: 100;
+        background: rgba(26,26,26,0.80); border: 1px solid var(--border-light);
+        border-radius: 6px; width: 32px; padding: 6px 0 4px;
+        display: flex; flex-direction: column; align-items: center; gap: 1px;
+        pointer-events: none;
+      }
+      .na-arrow { font-size: 16px; line-height: 1; color: #fff; }
+      .na-label { font-size: 9px; font-weight: 700; color: var(--text-secondary); letter-spacing: 0.5px; }
+
+      .seg-opt input:disabled + label { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
+
+      /* ── Active layer card ──────────────────────────────────── */
+      .layer-card {
+        background: var(--bg-elevated); border: 1px solid var(--border-light);
+        border-radius: var(--radius); padding: 11px 13px;
+        display: flex; flex-direction: column; gap: 10px;
+      }
+
+      .layer-card-name { font-size: 12px; font-weight: 600; color: var(--text-primary); line-height: 1.4; }
+      .layer-card-name.is-lst  { color: var(--accent); }
+      .layer-card-name.is-ndvi { color: var(--green); }
+      .layer-card-name.is-ndbi { color: var(--blue); }
+
+      /* ── Fark note ──────────────────────────────────────────── */
+      #fark-note {
+        display: none; margin-top: 8px;
+        background: rgba(232,93,4,.06); border: 1px solid rgba(232,93,4,.18);
+        border-radius: 4px; padding: 7px 10px;
+        font-size: 10.5px; color: var(--text-secondary); line-height: 1.5;
+      }
+      #fark-note.visible { display: block; }
+
+      /* ── Opacity slider ─────────────────────────────────────── */
+      .slider-row { display: flex; align-items: center; gap: 9px; }
+
+      .slider-lbl {
+        font-size: 10px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.07em; color: var(--text-muted); flex-shrink: 0; width: 44px;
+      }
+
+      .slider-pct {
+        font-size: 11px; font-weight: 600; color: var(--text-secondary);
+        flex-shrink: 0; width: 32px; text-align: right; font-variant-numeric: tabular-nums;
+      }
+
+      input[type='range'] {
+        -webkit-appearance: none; appearance: none;
+        flex: 1; height: 3px; border-radius: 2px; outline: none; cursor: pointer;
+        background: linear-gradient(
+          to right,
+          var(--accent) 0%,
+          var(--accent) var(--fill, 100%),
+          var(--border-light) var(--fill, 100%),
+          var(--border-light) 100%
+        );
+      }
+
+      input[type='range']::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 13px; height: 13px; border-radius: 50%;
+        background: var(--accent); border: 2px solid #1a1a1a;
+        box-shadow: 0 0 0 1px var(--accent); cursor: pointer;
+        transition: box-shadow var(--dur);
+      }
+
+      input[type='range']:hover::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-glow); }
+      input[type='range']::-moz-range-thumb { width: 13px; height: 13px; border-radius: 50%; background: var(--accent); border: 2px solid #1a1a1a; cursor: pointer; }
+
+      /* ── Sanayi extra card ──────────────────────────────────── */
+      .extra-card {
+        background: var(--bg-elevated); border: 1px solid var(--border-light);
+        border-radius: var(--radius); padding: 11px 13px;
+        display: flex; flex-direction: column; gap: 10px;
+      }
+
+      .extra-card-row { display: flex; align-items: center; gap: 9px; }
+      .extra-card-name { font-size: 12px; font-weight: 500; color: var(--text-secondary); flex: 1; }
+
+      /* iOS toggle */
+      .tog { position: relative; width: 34px; height: 19px; flex-shrink: 0; cursor: pointer; }
+      .tog input { position: absolute; opacity: 0; width: 0; height: 0; }
+      .tog-track { position: absolute; inset: 0; border-radius: 10px; background: var(--border-light); transition: background var(--dur); }
+      .tog-track::after { content: ''; position: absolute; width: 13px; height: 13px; border-radius: 50%; background: #aaa; top: 3px; left: 3px; transition: transform var(--dur) var(--ease), background var(--dur); }
+      .tog input:checked + .tog-track { background: var(--accent); }
+      .tog input:checked + .tog-track::after { transform: translateX(15px); background: #fff; }
+
+      .extra-opacity { display: none; }
+      .extra-opacity.visible { display: flex; }
+
+      /* ── Detail panel ───────────────────────────────────────── */
+      #detail-panel {
+        display: none;
+        padding: 0 16px 16px;
+      }
+
+      .detail-card {
+        background: var(--bg-elevated); border: 1px solid var(--border-light);
+        border-radius: var(--radius); padding: 12px 13px;
+        display: flex; flex-direction: column; gap: 11px;
+      }
+
+      .detail-head {
+        display: flex; align-items: center; gap: 8px;
+      }
+
+      .detail-head-title {
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.08em; color: var(--text-muted); flex: 1;
+      }
+
+      #detail-close {
+        width: 18px; height: 18px; border-radius: 3px;
+        background: transparent; border: none; cursor: pointer;
+        color: var(--text-muted); font-size: 14px; line-height: 1;
+        display: flex; align-items: center; justify-content: center;
+        transition: background var(--dur), color var(--dur);
+        padding: 0; flex-shrink: 0;
+      }
+
+      #detail-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+      /* Compare bars */
+      .compare-bars { display: flex; flex-direction: column; gap: 7px; }
+
+      .compare-row { display: flex; align-items: center; gap: 8px; }
+
+      .compare-year {
+        font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+        color: var(--text-muted); width: 28px; flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .compare-bar-wrap {
+        flex: 1; height: 8px; background: var(--border);
+        border-radius: 4px; overflow: hidden;
+      }
+
+      .compare-bar {
+        height: 100%; border-radius: 4px;
+        transition: width 0.45s var(--ease);
+        min-width: 0;
+      }
+
+      .bar-2016 { background: linear-gradient(90deg, #d97706 0%, #e85d04 100%); }
+      .bar-2025 { background: linear-gradient(90deg, #1d4ed8 0%, #60a5fa 100%); }
+
+      .compare-val {
+        font-size: 11px; font-weight: 700; color: var(--text-primary);
+        width: 48px; text-align: right; flex-shrink: 0;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* Diff row */
+      .diff-row {
+        display: flex; align-items: center; justify-content: space-between;
+        padding-top: 8px; border-top: 1px solid var(--border);
+      }
+
+      .diff-lbl {
+        font-size: 10px; color: var(--text-muted); font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.07em;
+      }
+
+      .diff-val { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+      .diff-val.neg { color: var(--blue); }
+      .diff-val.pos { color: var(--accent); }
+
+      .diff-note { font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-top: 3px; }
+
+      /* raster notice inside detail */
+      #raster-notice {
+        font-size: 11px; color: var(--text-muted); line-height: 1.5;
+        padding: 4px 2px; display: none;
+      }
+      #raster-notice.visible { display: block; }
+
+      /* ── Map container ──────────────────────────────────────── */
+      #map-container { flex: 1; position: relative; overflow: hidden; background: #0a0a0a; }
+      #map { width: 100%; height: 100%; }
+
+      /* ── Sidebar toggle ─────────────────────────────────────── */
+      #sidebar-toggle {
+        position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+        width: 20px; height: 46px;
+        background: var(--bg-elevated); border: 1px solid var(--border-light); border-left: none;
+        border-radius: 0 5px 5px 0; color: var(--text-muted); cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        z-index: 50; padding: 0;
+        transition: background var(--dur), color var(--dur), box-shadow var(--dur);
+      }
+
+      #sidebar-toggle:hover { background: var(--bg-hover); color: var(--accent); box-shadow: 2px 0 10px rgba(0,0,0,.35); }
+
+      .toggle-chevron { font-size: 15px; pointer-events: none; display: block; transition: transform var(--dur) var(--ease); }
+      #sidebar-toggle.flipped .toggle-chevron { transform: scaleX(-1); }
+
+      /* ── Hover tooltip ──────────────────────────────────────── */
+      #hex-tooltip {
+        position: absolute; display: none; pointer-events: none; z-index: 200;
+        background: var(--bg-elevated); border: 1px solid var(--border-light);
+        border-radius: 5px; padding: 8px 11px;
+        box-shadow: 0 6px 20px rgba(0,0,0,.55);
+        font-family: var(--font); min-width: 120px;
+        animation: tt-in 0.1s var(--ease);
+      }
+
+      @keyframes tt-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+      .tt-title {
+        font-size: 9.5px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 4px;
+      }
+
+      .tt-val {
+        font-size: 17px; font-weight: 700; color: var(--text-primary);
+        font-variant-numeric: tabular-nums; line-height: 1;
+      }
+
+      .tt-val.neg { color: var(--blue); }
+      .tt-val.pos { color: var(--accent); }
+
+      .tt-range {
+        font-size: 10px; color: var(--text-muted);
+        margin-top: 4px; font-variant-numeric: tabular-nums;
+      }
+
+      .tt-sep { height: 1px; background: var(--border); margin: 6px 0; }
+
+      .tt-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .tt-row-lbl { font-size: 10px; color: var(--text-muted); }
+      .tt-row-val { font-size: 11px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+      /* ── Attribution ────────────────────────────────────────── */
+      #map-credit {
+        position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%);
+        font-size: 10px; color: rgba(255,255,255,.2);
+        pointer-events: none; font-family: var(--font); z-index: 10; white-space: nowrap;
+      }
+
+      /* ── Legend ─────────────────────────────────────────────── */
+      #map-legend {
+        position: absolute; bottom: 28px; right: 8px; z-index: 100;
+        background: rgba(26,26,26,0.93); border: 1px solid var(--border-light);
+        border-radius: 6px; padding: 10px 12px 8px;
+        backdrop-filter: blur(8px);
+        min-width: 150px; max-width: 192px;
+        box-shadow: 0 4px 18px rgba(0,0,0,.55);
+        font-family: var(--font); pointer-events: none;
+      }
+
+      #legend-hdr {
+        display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+        margin-bottom: 7px;
+      }
+
+      #legend-title { font-size: 11px; font-weight: 700; color: var(--text-primary); }
+      #legend-unit  { font-size: 9px;  font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+      #legend-grad {
+        height: 10px; border-radius: 3px; margin-bottom: 3px;
+        border: 1px solid rgba(255,255,255,0.07);
+      }
+
+      #legend-scale {
+        display: flex; justify-content: space-between; margin-bottom: 7px;
+      }
+
+      .lgd-sc { font-size: 9px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+      #legend-classes { display: flex; flex-direction: column; gap: 3px; }
+
+      .lgd-row { display: flex; align-items: center; gap: 7px; }
+
+      .lgd-sw {
+        width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0;
+        border: 1px solid rgba(255,255,255,0.09);
+      }
+
+      .lgd-lbl { font-size: 10px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+      /* ── Info button ─────────────────────────────────────────── */
+      #info-btn {
+        position: absolute; top: 12px; right: 8px; z-index: 100;
+        width: 28px; height: 28px; border-radius: 50%;
+        background: rgba(26,26,26,0.93); border: 1px solid var(--border-light);
+        color: var(--text-muted); font-size: 13px; font-weight: 700; font-style: italic;
+        font-family: Georgia, 'Times New Roman', serif; cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,.4); backdrop-filter: blur(4px);
+        transition: background var(--dur), color var(--dur), border-color var(--dur);
+      }
+
+      #info-btn:hover { background: var(--bg-elevated); color: var(--accent); border-color: var(--accent-border); }
+
+      /* ── Methodology modal ───────────────────────────────────── */
+      #info-modal {
+        display: none; position: fixed; inset: 0; z-index: 2000;
+        align-items: center; justify-content: center;
+      }
+
+      #info-modal.open { display: flex; }
+
+      #info-backdrop {
+        position: absolute; inset: 0;
+        background: rgba(0,0,0,0.72); backdrop-filter: blur(4px);
+        cursor: pointer;
+      }
+
+      #info-card {
+        position: relative; z-index: 1;
+        background: var(--bg-surface); border: 1px solid var(--border-light);
+        border-radius: 10px; width: min(560px, 92vw);
+        max-height: 82vh; display: flex; flex-direction: column;
+        box-shadow: 0 20px 60px rgba(0,0,0,.8);
+        font-family: var(--font);
+        animation: card-in 0.18s var(--ease);
+      }
+
+      @keyframes card-in { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: none; } }
+
+      #info-card-head {
+        display: flex; align-items: center; gap: 12px;
+        padding: 15px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+      }
+
+      #info-card-head-stripe {
+        width: 3px; height: 20px; border-radius: 2px; flex-shrink: 0;
+        background: linear-gradient(180deg, #f44b0a, #e85d04);
+      }
+
+      #info-card-head-title { font-size: 13.5px; font-weight: 700; color: var(--text-primary); flex: 1; }
+
+      #info-modal-close {
+        width: 24px; height: 24px; border-radius: 4px;
+        background: transparent; border: none; cursor: pointer;
+        color: var(--text-muted); font-size: 18px; line-height: 1;
+        display: flex; align-items: center; justify-content: center;
+        transition: background var(--dur), color var(--dur); flex-shrink: 0;
+      }
+
+      #info-modal-close:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+      #info-card-body {
+        overflow-y: auto; padding: 18px 18px 20px; flex: 1;
+        display: flex; flex-direction: column; gap: 15px;
+      }
+
+      #info-card-body::-webkit-scrollbar { width: 4px; }
+      #info-card-body::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+
+      .ms-title {
+        font-size: 10px; font-weight: 700; text-transform: uppercase;
+        letter-spacing: 0.1em; color: var(--accent); margin-bottom: 5px;
+        display: flex; align-items: center; gap: 6px;
+      }
+
+      .ms-title::after { content: ''; flex: 1; height: 1px; background: var(--accent-border); }
+
+      .ms-body { font-size: 12px; line-height: 1.72; color: var(--text-secondary); }
+      .ms-body strong { color: var(--text-primary); font-weight: 600; }
+
+      .ms-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+
+      .ms-tag {
+        background: var(--bg-elevated); border: 1px solid var(--border-light);
+        border-radius: 4px; padding: 2px 8px;
+        font-size: 10px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.03em;
+      }
+
+
+
+      /* ── Hide all qgis2web default controls ─────────────────── */
+      #top-left-container, #top-right-container,
+      #bottom-left-container, #bottom-right-container { display: none !important; }
+      .layer-switcher                { display: none !important; }
+      .photon-geocoder-autocomplete  { display: none !important; }
+      .measure-control               { display: none !important; }
+      .ol-zoom                       { display: none !important; }
+      .ol-attribution                { display: none !important; }
+      .bottom-attribution            { display: none !important; }
+      /* Hide original qgis2web popup — we use our own tooltip + detail panel */
+      #popup                         { display: none !important; }
+    </style>
+  </head>
+
+  <body>
+    <div id="app-root">
+
+      <!-- ── Header ─────────────────────────────────────────── -->
+      <header id="app-header">
+        <div id="hdr-stripe"></div>
+        <div id="hdr-brand">
+          <span class="hdr-title">Gebze Kentsel Isı Adası Analizi</span>
+          <span class="hdr-sub">Kocaeli &middot; Landsat 8/9 &middot; EPSG:32635</span>
+        </div>
+        <div id="hdr-badge">UHI &middot; LST</div>
+      </header>
+
+      <!-- ── Body ───────────────────────────────────────────── -->
+      <div id="app-body">
+
+        <!-- ── Sidebar ──────────────────────────────────────── -->
+        <aside id="sidebar">
+          <div id="sidebar-inner">
+
+            <div id="sidebar-head">
+              <span id="sidebar-head-title">Katmanlar &amp; Analiz</span>
+            </div>
+
+            <div id="sidebar-body">
+
+              <!-- YIL -->
+              <div class="ctrl-section">
+                <div class="ctrl-label">Yıl</div>
+                <div class="seg-group" id="yil-group">
+                  <div class="seg-opt">
+                    <input type="radio" name="yil" id="yil-2016" value="2016">
+                    <label for="yil-2016">2016</label>
+                  </div>
+                  <div class="seg-opt">
+                    <input type="radio" name="yil" id="yil-2025" value="2025">
+                    <label for="yil-2025">2025</label>
+                  </div>
+                  <div class="seg-opt">
+                    <input type="radio" name="yil" id="yil-fark" value="fark" checked>
+                    <label for="yil-fark">Fark</label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- METRİK -->
+              <div class="ctrl-section">
+                <div class="ctrl-label">Metrik</div>
+                <div class="seg-group metrik-group" id="metrik-group">
+                  <div class="seg-opt">
+                    <input type="radio" name="metrik" id="metrik-lst"  value="LST"  checked disabled>
+                    <label for="metrik-lst">LST</label>
+                  </div>
+                  <div class="seg-opt">
+                    <input type="radio" name="metrik" id="metrik-ndvi" value="NDVI" disabled>
+                    <label for="metrik-ndvi">NDVI</label>
+                  </div>
+                  <div class="seg-opt">
+                    <input type="radio" name="metrik" id="metrik-ndbi" value="NDBI" disabled>
+                    <label for="metrik-ndbi">NDBI</label>
+                  </div>
+                </div>
+                <div id="fark-note" class="visible" style="margin-top:8px;">
+                  Fark haritası yalnızca LST verisi içermektedir
+                  (2016–2025 değişimi).
+                </div>
+              </div>
+
+              <!-- AKTİF KATMAN -->
+              <div class="ctrl-section">
+                <div class="ctrl-label">Aktif Katman</div>
+                <div class="layer-card">
+                  <div class="layer-card-name is-lst" id="active-name">
+                    2016–2025 LST Değişimi
+                  </div>
+                  <div class="slider-row">
+                    <span class="slider-lbl">Opaklık</span>
+                    <input type="range" id="main-opacity" min="0" max="100" value="100">
+                    <span class="slider-pct" id="main-pct">100%</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- İSTATİSTİK -->
+              <div class="ctrl-section" id="stats-section" style="display:none">
+                <div class="ctrl-label">Alan İstatistikleri <span id="stat-count"></span></div>
+                <div class="stats-card">
+                  <div class="stats-row">
+                    <span class="stats-lbl">Ortalama</span>
+                    <span class="stats-val" id="stat-mean">—</span>
+                  </div>
+                  <div class="stats-row">
+                    <span class="stats-lbl">Minimum</span>
+                    <span class="stats-val" id="stat-min">—</span>
+                  </div>
+                  <div class="stats-row">
+                    <span class="stats-lbl">Maksimum</span>
+                    <span class="stats-val" id="stat-max">—</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- DEĞER FİLTRESİ -->
+              <div class="ctrl-section" id="filter-section" style="display:none">
+                <div class="ctrl-label">Değer Filtresi</div>
+                <div class="filter-card">
+                  <div class="filter-row">
+                    <span class="filter-lbl">Min</span>
+                    <input type="number" id="filter-min" step="0.5" placeholder="—">
+                    <span class="filter-unit">°C</span>
+                  </div>
+                  <div class="filter-row">
+                    <span class="filter-lbl">Maks</span>
+                    <input type="number" id="filter-max" step="0.5" placeholder="—">
+                    <span class="filter-unit">°C</span>
+                  </div>
+                  <div class="filter-active-note" id="filter-note">● Filtre aktif</div>
+                  <button id="filter-reset">Sıfırla</button>
+                </div>
+              </div>
+
+              <!-- EK KATMANLAR -->
+              <div class="ctrl-section">
+                <div class="ctrl-label">Ek Katmanlar</div>
+                <div class="extra-card">
+                  <div class="extra-card-row">
+                    <label class="tog" title="Sanayi alanlarını göster/gizle">
+                      <input type="checkbox" id="tog-sanayi">
+                      <span class="tog-track"></span>
+                    </label>
+                    <span class="extra-card-name">Gebze Sanayi Alanları</span>
+                  </div>
+                  <div class="slider-row extra-opacity" id="sanayi-opacity-row">
+                    <span class="slider-lbl">Opaklık</span>
+                    <input type="range" id="sanayi-opacity" min="0" max="100" value="100">
+                    <span class="slider-pct" id="sanayi-pct">100%</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- DETAIL PANEL (click to reveal) -->
+              <div id="detail-panel">
+                <div class="ctrl-label" style="padding: 0 0 8px;">
+                  Seçili Alan
+                  <button id="detail-close" title="Kapat">&#215;</button>
+                  <span style="flex:1;height:1px;background:var(--border);display:inline-block;margin-left:6px;"></span>
+                </div>
+                <div class="detail-card">
+                  <div id="raster-notice">
+                    NDVI / NDBI raster katmanlarında piksel başı tıklama desteklenmez.
+                    LST veya Fark katmanını seçerek bir hex'e tıklayın.
+                  </div>
+                  <div class="compare-bars" id="compare-bars">
+                    <div class="compare-row">
+                      <span class="compare-year">2016</span>
+                      <div class="compare-bar-wrap">
+                        <div class="compare-bar bar-2016" id="bar-2016" style="width:0%"></div>
+                      </div>
+                      <span class="compare-val" id="val-2016">—</span>
+                    </div>
+                    <div class="compare-row">
+                      <span class="compare-year">2025</span>
+                      <div class="compare-bar-wrap">
+                        <div class="compare-bar bar-2025" id="bar-2025" style="width:0%"></div>
+                      </div>
+                      <span class="compare-val" id="val-2025">—</span>
+                    </div>
+                  </div>
+                  <div class="diff-row">
+                    <div>
+                      <div class="diff-lbl">2016 → 2025 Değişim</div>
+                      <div class="diff-note" id="diff-note"></div>
+                    </div>
+                    <span class="diff-val" id="diff-val">—</span>
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- #sidebar-body -->
+
+            <div id="sidebar-foot">
+              <div class="foot-text">
+                <strong>Gebze, Kocaeli</strong> &middot; Temmuz 2016 &amp; 2025<br>
+                Landsat LST &middot; NDVI &middot; NDBI &middot; UHI Analizi<br>
+                Final Projesi &middot; 2026
+              </div>
+            </div>
+
+          </div><!-- #sidebar-inner -->
+        </aside>
+
+        <!-- ── Map ────────────────────────────────────────────── -->
+        <div id="map-container">
+
+          <button id="sidebar-toggle" title="Paneli gizle / göster" aria-label="Sidebar">
+            <span class="toggle-chevron">&#8249;</span>
+          </button>
+
+          <div id="map">
+            <!-- qgis2web popup kept in DOM but hidden via CSS -->
+            <div id="popup" class="ol-popup">
+              <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+              <div id="popup-content"></div>
+            </div>
+          </div>
+
+          <!-- Hover tooltip -->
+          <div id="hex-tooltip"></div>
+
+          <!-- Dynamic legend (bottom-right) -->
+          <div id="map-legend">
+            <div id="legend-hdr">
+              <span id="legend-title">—</span>
+              <span id="legend-unit"></span>
+            </div>
+            <div id="legend-grad"></div>
+            <div id="legend-scale">
+              <span class="lgd-sc" id="legend-min"></span>
+              <span class="lgd-sc" id="legend-max"></span>
+            </div>
+            <div id="legend-classes"></div>
+          </div>
+
+          <!-- Info + Export buttons (top-right) -->
+          <button id="info-btn" title="Proje metodolojisi">i</button>
+          <button id="export-btn" title="Aktif katmanı CSV olarak dışa aktar">&#8595;</button>
+          <button id="screenshot-btn" title="Haritayı PNG olarak kaydet">&#9635;</button>
+
+          <!-- North arrow (bottom-left) -->
+          <div id="north-arrow">
+            <div class="na-arrow">&#9650;</div>
+            <div class="na-label">N</div>
+          </div>
+
+          <div id="map-credit">OpenLayers &middot; qgis2web &middot; QGIS</div>
+        </div>
+
+      </div><!-- #app-body -->
+    </div><!-- #app-root -->
+
+    <!-- ── OL + layer scripts ─────────────────────────────────── -->
+    <script src="resources/qgis2web_expressions.js"></script>
+    <script src="resources/proj4.js"></script>
+    <script>proj4.defs('EPSG:32635','+proj=utm +zone=35 +datum=WGS84 +units=m +no_defs');</script>
+    <script src="./resources/functions.js"></script>
+    <script src="./resources/ol.js"></script>
+    <script src="./resources/ol-layerswitcher.js"></script>
+    <script src="resources/photon-geocoder-autocomplete.min.js"></script>
+    <script src="resources/olms.js"></script>
+    <script src="layers/15072016ScaklkHaritas_5.js"></script>
+    <script src="layers/15072016ScaklkHaritas_6.js"></script>
+    <script src="layers/1507201616072026YllarndakiScaklkDeiimi_7.js"></script>
+    <script src="layers/GebzeSanayiAlanlar_8.js"></script>
+    <script src="styles/15072016ScaklkHaritas_5_style.js"></script>
+    <script src="styles/15072016ScaklkHaritas_6_style.js"></script>
+    <script src="styles/1507201616072026YllarndakiScaklkDeiimi_7_style.js"></script>
+    <script src="styles/GebzeSanayiAlanlar_8_style.js"></script>
+    <script src="./layers/layers.js" type="text/javascript"></script>
+    <script src="./resources/Autolinker.min.js"></script>
+    <script src="./resources/qgis2web.js"></script>
+
+    <!-- ── Methodology modal ─────────────────────────────────── -->
+    <div id="info-modal">
+      <div id="info-backdrop"></div>
+      <div id="info-card">
+        <div id="info-card-head">
+          <div id="info-card-head-stripe"></div>
+          <span id="info-card-head-title">Proje Metodolojisi</span>
+          <button id="info-modal-close" title="Kapat">&#215;</button>
+        </div>
+        <div id="info-card-body">
+
+          <div>
+            <div class="ms-title">Veri Kaynağı</div>
+            <div class="ms-body">
+              Analizde <strong>Landsat 8</strong> (2016) ve <strong>Landsat 9</strong> (2025)
+              uydu görüntüleri kullanılmıştır. Her iki görüntü de <strong>Temmuz</strong> ayına
+              ait olup mevsimsel tutarlılık sağlanmıştır. Görüntüler
+              <strong>USGS Earth Explorer</strong> platformundan temin edilmiştir.
+              <div class="ms-tags">
+                <span class="ms-tag">Landsat 8 OLI/TIRS</span>
+                <span class="ms-tag">Landsat 9 OLI-2/TIRS-2</span>
+                <span class="ms-tag">15.07.2016</span>
+                <span class="ms-tag">16.07.2025</span>
+                <span class="ms-tag">30 m çözünürlük</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="ms-title">LST — Yüzey Sıcaklığı</div>
+            <div class="ms-body">
+              <strong>Land Surface Temperature (LST)</strong>, Landsat termal bantları
+              (Band 10) kullanılarak hesaplanmıştır. Radyans değerleri Planck denklemi
+              ile sıcaklığa dönüştürülmüş; yayınım katsayısı (emissivity) NDVI tabanlı
+              yöntemle (Sobrino et al., 2004) düzeltilmiştir. Sonuçlar
+              <strong>hekzagonal (hex) ızgara</strong> üzerinde toplanarak mekansal
+              analiz yapılmıştır.
+              <div class="ms-tags">
+                <span class="ms-tag">Band 10 (TIRS)</span>
+                <span class="ms-tag">Planck denklemi</span>
+                <span class="ms-tag">NDVI emissivity</span>
+                <span class="ms-tag">Hex aggregasyon</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="ms-title">NDVI — Normalize Bitki İndeksi</div>
+            <div class="ms-body">
+              <strong>Normalized Difference Vegetation Index (NDVI)</strong>, yakın kızılötesi
+              (Band 5) ve kırmızı (Band 4) bantlar kullanılarak hesaplanmıştır:
+              <strong>NDVI = (NIR − RED) / (NIR + RED)</strong>.
+              Değer aralığı −1 ile +1 arasındadır; yüksek değerler yoğun bitki örtüsünü gösterir.
+              UHI etkisini hafifletici yeşil alanların konumsal dağılımını görselleştirmek için
+              kullanılmıştır.
+              <div class="ms-tags">
+                <span class="ms-tag">Band 4 (RED)</span>
+                <span class="ms-tag">Band 5 (NIR)</span>
+                <span class="ms-tag">−1 … +1</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="ms-title">NDBI — Normalize Yapılaşma İndeksi</div>
+            <div class="ms-body">
+              <strong>Normalized Difference Built-up Index (NDBI)</strong>, kısa dalgaboyu
+              kızılötesi (Band 6) ve yakın kızılötesi (Band 5) bantlar kullanılarak
+              hesaplanmıştır: <strong>NDBI = (SWIR − NIR) / (SWIR + NIR)</strong>.
+              Yüksek NDBI değerleri kentsel yapılaşma yoğunluğunu temsil eder.
+              LST ile pozitif korelasyonu, ısı adası kaynaklarının tespitinde kullanılmıştır.
+              <div class="ms-tags">
+                <span class="ms-tag">Band 5 (NIR)</span>
+                <span class="ms-tag">Band 6 (SWIR-1)</span>
+                <span class="ms-tag">−1 … +1</span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="ms-title">UHI Analizi</div>
+            <div class="ms-body">
+              Kentsel Isı Adası (UHI) analizi, Gebze ilçe sınırları içindeki
+              <strong>sanayi ve kentsel alanlarda</strong> LST dağılımı ile kırsal/yeşil
+              alanlar karşılaştırılarak gerçekleştirilmiştir. 2016–2025 arası
+              <strong>LST değişim haritası (Fark)</strong>, kentsel dönüşüm ve iklim
+              değişikliğine bağlı ısınmanın mekansal örüntüsünü ortaya koymaktadır.
+              <div class="ms-tags">
+                <span class="ms-tag">Gebze, Kocaeli</span>
+                <span class="ms-tag">EPSG:32635</span>
+                <span class="ms-tag">H3 Hex Grid</span>
+                <span class="ms-tag">QGIS 3.x</span>
+                <span class="ms-tag">2016–2025</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Custom app script ─────────────────────────────────── -->
+    <script>
+    (function () {
+      'use strict';
+
+      /* ═══════════════════════════════════════════════════════════
+         LAYER CONTROL
+         ═══════════════════════════════════════════════════════════ */
+
+      var LAYER_MAP = {
+        '2016': { LST: lyr_15072016ScaklkHaritas_5,      NDVI: lyr_15072016GebzeNDVIHaritas_4, NDBI: lyr_15072016GebzeNDBIHaritas_3 },
+        '2025': { LST: lyr_15072016ScaklkHaritas_6,      NDVI: lyr_16072026GebzeNDVIHartias_1, NDBI: lyr_16072026GebzeNDBIHartias_2 },
+        'fark': { LST: lyr_1507201616072026YllarndakiScaklkDeiimi_7 }
+      };
+
+      var LAYER_NAMES = {
+        '2016': { LST: '15.07.2016 LST Sıcaklık Haritası', NDVI: '15.07.2016 NDVI Haritası', NDBI: '15.07.2016 NDBI Haritası' },
+        '2025': { LST: '16.07.2025 LST Sıcaklık Haritası', NDVI: '16.07.2025 NDVI Haritası', NDBI: '16.07.2025 NDBI Haritası' },
+        'fark': { LST: '2016–2025 LST Sıcaklık Değişimi' }
+      };
+
+      var NAME_COLOR = { LST: 'is-lst', NDVI: 'is-ndvi', NDBI: 'is-ndbi' };
+
+      var ALL_DATA = [
+        lyr_15072016ScaklkHaritas_6, lyr_15072016GebzeNDVIHaritas_4, lyr_15072016GebzeNDBIHaritas_3,
+        lyr_15072016ScaklkHaritas_5, lyr_16072026GebzeNDVIHartias_1, lyr_16072026GebzeNDBIHartias_2,
+        lyr_1507201616072026YllarndakiScaklkDeiimi_7
+      ];
+
+      /* ── Legend config ───────────────────────────────────── */
+      var LEGENDS = {
+        '2016:LST': {
+          title: 'LST 2016', unit: '°C',
+          gradient: 'linear-gradient(to right,rgb(5,113,176),rgb(146,197,222),rgb(247,247,247),rgb(244,165,130),rgb(202,0,32))',
+          scaleMin: '0.0', scaleMax: '48.1',
+          classes: [
+            { color: 'rgb(5,113,176)',   label: '0.0 – 32.8' },
+            { color: 'rgb(146,197,222)', label: '32.8 – 35.3' },
+            { color: 'rgb(247,247,247)', label: '35.3 – 38.4' },
+            { color: 'rgb(244,165,130)', label: '38.4 – 42.2' },
+            { color: 'rgb(202,0,32)',    label: '42.2 – 48.1' }
+          ]
+        },
+        '2025:LST': {
+          title: 'LST 2025', unit: '°C',
+          gradient: 'linear-gradient(to right,rgb(5,113,176),rgb(146,197,222),rgb(247,247,247),rgb(244,165,130),rgb(202,0,32))',
+          scaleMin: '0.0', scaleMax: '50.2',
+          classes: [
+            { color: 'rgb(5,113,176)',   label: '0.0 – 35.9' },
+            { color: 'rgb(146,197,222)', label: '35.9 – 39.6' },
+            { color: 'rgb(247,247,247)', label: '39.6 – 43.6' },
+            { color: 'rgb(244,165,130)', label: '43.6 – 47.0' },
+            { color: 'rgb(202,0,32)',    label: '47.0 – 50.2' }
+          ]
+        },
+        'fark:LST': {
+          title: 'LST Fark', unit: '°C',
+          gradient: 'linear-gradient(to right,rgb(5,113,176),rgb(255,255,255),rgb(237,170,181),rgb(220,85,106),rgb(202,0,32))',
+          scaleMin: '−5.2', scaleMax: '+23.5',
+          classes: [
+            { color: 'rgb(5,113,176)',   label: '−5.2 – 0' },
+            { color: 'rgb(255,255,255)', label: '0 – +2' },
+            { color: 'rgb(237,170,181)', label: '+2 – +5' },
+            { color: 'rgb(220,85,106)',  label: '+5 – +10' },
+            { color: 'rgb(202,0,32)',    label: '+10 – +23.5' }
+          ]
+        },
+        '2016:NDVI': {
+          title: 'NDVI 2016', unit: 'indeks',
+          gradient: 'linear-gradient(to right,#7b3f00,#d4a57a,#ffffcc,#78c679,#006400)',
+          scaleMin: '−0.2', scaleMax: '0.8', classes: null
+        },
+        '2025:NDVI': {
+          title: 'NDVI 2025', unit: 'indeks',
+          gradient: 'linear-gradient(to right,#7b3f00,#d4a57a,#ffffcc,#78c679,#006400)',
+          scaleMin: '−0.2', scaleMax: '0.8', classes: null
+        },
+        '2016:NDBI': {
+          title: 'NDBI 2016', unit: 'indeks',
+          gradient: 'linear-gradient(to right,#1a9641,#a6d96a,#ffffbf,#fdae61,#d7191c)',
+          scaleMin: '−0.5', scaleMax: '0.5', classes: null
+        },
+        '2025:NDBI': {
+          title: 'NDBI 2025', unit: 'indeks',
+          gradient: 'linear-gradient(to right,#1a9641,#a6d96a,#ffffbf,#fdae61,#d7191c)',
+          scaleMin: '−0.5', scaleMax: '0.5', classes: null
+        }
+      };
+
+      var elLegendTitle   = document.getElementById('legend-title');
+      var elLegendUnit    = document.getElementById('legend-unit');
+      var elLegendGrad    = document.getElementById('legend-grad');
+      var elLegendScale   = document.getElementById('legend-scale');
+      var elLegendMin     = document.getElementById('legend-min');
+      var elLegendMax     = document.getElementById('legend-max');
+      var elLegendClasses = document.getElementById('legend-classes');
+
+      function updateLegend(key) {
+        var cfg = LEGENDS[key];
+        if (!cfg) { document.getElementById('map-legend').style.display = 'none'; return; }
+        document.getElementById('map-legend').style.display = '';
+        elLegendTitle.textContent = cfg.title;
+        elLegendUnit.textContent  = cfg.unit;
+        elLegendGrad.style.background = cfg.gradient;
+        elLegendGrad.style.display     = '';
+        elLegendScale.style.display    = '';
+        elLegendMin.textContent = cfg.scaleMin;
+        elLegendMax.textContent = cfg.scaleMax;
+        elLegendClasses.innerHTML = '';
+        if (cfg.classes) {
+          cfg.classes.forEach(function (cls) {
+            var row = document.createElement('div');
+            row.className = 'lgd-row';
+            row.innerHTML = '<div class="lgd-sw" style="background:' + cls.color + '"></div>'
+                          + '<span class="lgd-lbl">' + cls.label + '</span>';
+            elLegendClasses.appendChild(row);
+          });
+          elLegendGrad.style.display  = 'none';
+          elLegendScale.style.display = 'none';
+        }
+      }
+
+      var state = { yil: 'fark', metrik: 'LST' };
+      var currentLayer = null; /* shared with interaction code below */
+
+      var elActiveName  = document.getElementById('active-name');
+      var elMainOpacity = document.getElementById('main-opacity');
+      var elMainPct     = document.getElementById('main-pct');
+      var elFarkNote    = document.getElementById('fark-note');
+      var metrikInputs  = document.querySelectorAll('input[name="metrik"]');
+
+      function fillSlider(el, pct) { el.style.setProperty('--fill', pct + '%'); }
+
+      function applyLayers() {
+        var yil    = state.yil;
+        var metrik = state.metrik;
+        var isFark = yil === 'fark';
+        var resolvedMetrik = isFark ? 'LST' : metrik;
+
+        ALL_DATA.forEach(function (l) { l.setVisible(false); });
+
+        var lyr = LAYER_MAP[yil] && LAYER_MAP[yil][resolvedMetrik];
+        if (!lyr) return;
+        lyr.setVisible(true);
+        currentLayer = lyr;
+
+        elActiveName.textContent = LAYER_NAMES[yil][resolvedMetrik] || '';
+        elActiveName.className = 'layer-card-name ' + NAME_COLOR[isFark ? 'LST' : metrik];
+
+        var opPct = Math.round(lyr.getOpacity() * 100);
+        elMainOpacity.value = opPct;
+        fillSlider(elMainOpacity, opPct);
+        elMainPct.textContent = opPct + '%';
+
+        metrikInputs.forEach(function (i) { i.disabled = isFark; });
+        elFarkNote.classList.toggle('visible', isFark);
+
+        var g = document.getElementById('metrik-group');
+        g.classList.remove('lst-group','ndvi-group','ndbi-group');
+        var colorMap = { LST: 'lst-group', NDVI: 'ndvi-group', NDBI: 'ndbi-group' };
+        if (colorMap[isFark ? 'LST' : metrik]) g.classList.add(colorMap[isFark ? 'LST' : metrik]);
+
+        /* Dynamic legend */
+        updateLegend((isFark ? 'fark' : yil) + ':' + resolvedMetrik);
+
+        /* Close detail panel on layer switch */
+        closeDetail();
+
+        /* Update area stats and filter panel */
+        updateStats();
+        updateFilterSection();
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         ALAN İSTATİSTİKLERİ
+         ═══════════════════════════════════════════════════════════ */
+
+      var elStatsSection = document.getElementById('stats-section');
+      var elStatMean     = document.getElementById('stat-mean');
+      var elStatMin      = document.getElementById('stat-min');
+      var elStatMax      = document.getElementById('stat-max');
+      var elStatCount    = document.getElementById('stat-count');
+
+      function updateStats() {
+        if (!currentLayer || typeof currentLayer.getSource !== 'function') {
+          elStatsSection.style.display = 'none'; return;
+        }
+        var prop = null;
+        if      (currentLayer === lyr_15072016ScaklkHaritas_5)                prop = '16_LST_mean';
+        else if (currentLayer === lyr_15072016ScaklkHaritas_6)                prop = 'LST_mean';
+        else if (currentLayer === lyr_1507201616072026YllarndakiScaklkDeiimi_7) prop = 'LST_ort_dg';
+        if (!prop) { elStatsSection.style.display = 'none'; return; }
+
+        var features = currentLayer.getSource().getFeatures();
+        var sum = 0, mn = Infinity, mx = -Infinity, count = 0;
+        features.forEach(function (f) {
+          var v = parseFloat(f.get(prop));
+          if (isNaN(v) || v === 0) return;
+          sum += v; count++;
+          if (v < mn) mn = v;
+          if (v > mx) mx = v;
+        });
+        if (count === 0) { elStatsSection.style.display = 'none'; return; }
+
+        var isFarkLyr = currentLayer === lyr_1507201616072026YllarndakiScaklkDeiimi_7;
+        function fmt(v) {
+          if (isFarkLyr) return (v >= 0 ? '+' : '') + v.toFixed(1) + '°C';
+          return v.toFixed(1) + '°C';
+        }
+        elStatMean.textContent  = fmt(sum / count);
+        elStatMin.textContent   = fmt(mn);
+        elStatMax.textContent   = fmt(mx);
+        elStatCount.textContent = '(' + count + ' hex)';
+        elStatsSection.style.display = '';
+      }
+
+      /* ═══════════════════════════════════════════════════════════
+         DEĞER FİLTRESİ
+         ═══════════════════════════════════════════════════════════ */
+
+      var elFilterSection = document.getElementById('filter-section');
+      var elFilterMin     = document.getElementById('filter-min');
+      var elFilterMax     = document.getElementById('filter-max');
+      var elFilterNote    = document.getElementById('filter-note');
+
+      /* Orijinal stilleri ilk kullanımda sakla */
+      var _styleBackups = [];
+      function getOrigStyle(lyr) {
+        for (var i = 0; i < _styleBackups.length; i++) {
+          if (_styleBackups[i][0] === lyr) return _styleBackups[i][1];
+        }
+        var s = lyr.getStyle();
+        _styleBackups.push([lyr, s]);
+        return s;
+      }
+
+      function getLSTProp(lyr) {
+        if (lyr === lyr_15072016ScaklkHaritas_5)                    return '16_LST_mean';
+        if (lyr === lyr_15072016ScaklkHaritas_6)                    return 'LST_mean';
+        if (lyr === lyr_1507201616072026YllarndakiScaklkDeiimi_7)   return 'LST_ort_dg';
+        return null;
+      }
+
+      function applyFilter() {
+        if (!currentLayer || !getLSTProp(currentLayer)) return;
+        var prop   = getLSTProp(currentLayer);
+        var minVal = elFilterMin.value !== '' ? parseFloat(elFilterMin.value) : null;
+        var maxVal = elFilterMax.value !== '' ? parseFloat(elFilterMax.value) : null;
+        var orig   = getOrigStyle(currentLayer);
+        var active = minVal != null || maxVal != null;
+
+        elFilterNote.classList.toggle('visible', active);
+
+        if (!active) { currentLayer.setStyle(orig); return; }
+
+        currentLayer.setStyle(function (feature, resolution) {
+          var v = parseFloat(feature.get(prop));
+          if (!isNaN(v)) {
+            if (minVal != null && v < minVal) return null;
+            if (maxVal != null && v > maxVal) return null;
+          }
+          return orig(feature, resolution);
+        });
+      }
+
+      function resetFilter() {
+        elFilterMin.value = '';
+        elFilterMax.value = '';
+        elFilterNote.classList.remove('visible');
+        if (currentLayer && getLSTProp(currentLayer)) {
+          currentLayer.setStyle(getOrigStyle(currentLayer));
+        }
+      }
+
+      function updateFilterSection() {
+        var show = currentLayer && getLSTProp(currentLayer) != null;
+        if (!show) { elFilterSection.style.display = 'none'; return; }
+        /* Katman değişince filtreyi sıfırla */
+        elFilterMin.value = '';
+        elFilterMax.value = '';
+        elFilterNote.classList.remove('visible');
+        elFilterSection.style.display = '';
+      }
+
+      elFilterMin.addEventListener('input', applyFilter);
+      elFilterMax.addEventListener('input', applyFilter);
+      document.getElementById('filter-reset').addEventListener('click', resetFilter);
+
+      /* ═══════════════════════════════════════════════════════════
+         ÖLÇEK ÇUBUĞU + KUZEY OKU
+         ═══════════════════════════════════════════════════════════ */
+
+      map.addControl(new ol.control.ScaleLine({
+        units: 'metric',
+        minWidth: 80
+      }));
+
+      /* ═══════════════════════════════════════════════════════════
+         CSV DIŞA AKTAR
+         ═══════════════════════════════════════════════════════════ */
+
+      document.getElementById('export-btn').addEventListener('click', function () {
+        if (!currentLayer || typeof currentLayer.getSource !== 'function') return;
+        var features = currentLayer.getSource().getFeatures();
+        if (!features.length) return;
+
+        /* Sütun başlıklarını ilk feature'dan al (geometry hariç) */
+        var keys = Object.keys(features[0].getProperties()).filter(function (k) {
+          return k !== 'geometry';
+        });
+
+        var rows = [keys.join(',')];
+        features.forEach(function (f) {
+          var p = f.getProperties();
+          var row = keys.map(function (k) {
+            var v = p[k];
+            if (v == null) return '';
+            var s = String(v);
+            return (s.indexOf(',') > -1 || s.indexOf('"') > -1 || s.indexOf('\n') > -1)
+              ? '"' + s.replace(/"/g, '""') + '"'
+              : s;
+          });
+          rows.push(row.join(','));
+        });
+
+        var csv  = '﻿' + rows.join('\r\n'); /* BOM → Excel'de Türkçe karakter */
+        var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        var url  = URL.createObjectURL(blob);
+        var a    = document.createElement('a');
+        a.href = url;
+        a.download = 'kocaeli_lst_' + state.yil + '_' + state.metrik + '.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        /* Kısa flash animasyonu */
+        var btn = document.getElementById('export-btn');
+        btn.classList.add('flash');
+        setTimeout(function () { btn.classList.remove('flash'); }, 800);
+      });
+
+      /* ═══════════════════════════════════════════════════════════
+         EKRAN GÖRÜNTÜSÜ (PNG)
+         ═══════════════════════════════════════════════════════════ */
+
+      document.getElementById('screenshot-btn').addEventListener('click', function () {
+        var btn = this;
+        btn.classList.add('flash');
+
+        /* Google Satellite cross-origin tile'ları canvas'ı taint eder,
+           geçici gizleyip temiz OL canvas'larını yakalıyoruz */
+        lyr_GoogleSatellite_0.setVisible(false);
+
+        map.once('rendercomplete', function () {
+          var size = map.getSize();
+          var out = document.createElement('canvas');
+          out.width = size[0]; out.height = size[1];
+          var ctx = out.getContext('2d');
+
+          ctx.fillStyle = '#1a1a1a';
+          ctx.fillRect(0, 0, size[0], size[1]);
+
+          document.querySelectorAll('#map .ol-layer canvas, #map canvas.ol-layer').forEach(function (c) {
+            if (c.width > 0) {
+              var opacity = c.parentNode.style.opacity || c.style.opacity;
+              ctx.globalAlpha = opacity === '' ? 1 : (parseFloat(opacity) || 1);
+              var m = (c.style.transform || '').match(/^matrix\(([^)]*)\)$/);
+              if (m) {
+                ctx.setTransform.apply(ctx, m[1].split(',').map(Number));
+              } else {
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+              }
+              ctx.drawImage(c, 0, 0);
+            }
+          });
+          ctx.globalAlpha = 1;
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+          /* Satellite'ı geri aç */
+          lyr_GoogleSatellite_0.setVisible(true);
+          map.renderSync();
+
+          var a = document.createElement('a');
+          a.download = 'kocaeli_lst_' + state.yil + '_' + state.metrik + '_' +
+                       new Date().toISOString().slice(0, 10) + '.png';
+          a.href = out.toDataURL('image/png');
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+          setTimeout(function () { btn.classList.remove('flash'); }, 600);
+        });
+
+        map.renderSync();
+      });
+
+      document.querySelectorAll('input[name="yil"]').forEach(function (inp) {
+        inp.addEventListener('change', function () {
+          if (!this.checked) return;
+          state.yil = this.value; applyLayers();
+        });
+      });
+
+      metrikInputs.forEach(function (inp) {
+        inp.addEventListener('change', function () {
+          if (!this.checked) return;
+          state.metrik = this.value; applyLayers();
+        });
+      });
+
+      elMainOpacity.addEventListener('input', function () {
+        var v = +this.value;
+        fillSlider(this, v); elMainPct.textContent = v + '%';
+        if (currentLayer) currentLayer.setOpacity(v / 100);
+      });
+
+      var elTogSanayi     = document.getElementById('tog-sanayi');
+      var elSanayiOpRow   = document.getElementById('sanayi-opacity-row');
+      var elSanayiOpacity = document.getElementById('sanayi-opacity');
+      var elSanayiPct     = document.getElementById('sanayi-pct');
+
+      fillSlider(elSanayiOpacity, 100);
+
+      elTogSanayi.addEventListener('change', function () {
+        var on = this.checked;
+        lyr_GebzeSanayiAlanlar_8.setVisible(on);
+        elSanayiOpRow.classList.toggle('visible', on);
+      });
+
+      elSanayiOpacity.addEventListener('input', function () {
+        var v = +this.value;
+        fillSlider(this, v); elSanayiPct.textContent = v + '%';
+        lyr_GebzeSanayiAlanlar_8.setOpacity(v / 100);
+      });
+
+      /* Sidebar toggle */
+      var sidebar   = document.getElementById('sidebar');
+      var toggleBtn = document.getElementById('sidebar-toggle');
+      var collapsed = false;
+
+      toggleBtn.addEventListener('click', function () {
+        collapsed = !collapsed;
+        sidebar.classList.toggle('collapsed', collapsed);
+        toggleBtn.classList.toggle('flipped', collapsed);
+        setTimeout(function () { if (typeof map !== 'undefined') map.updateSize(); }, 300);
+      });
+
+      applyLayers(); /* initial render */
+
+      /* ── Info modal ───────────────────────────────────────── */
+      var infoModal = document.getElementById('info-modal');
+
+      function openModal()  { infoModal.classList.add('open'); }
+      function closeModal() { infoModal.classList.remove('open'); }
+
+      document.getElementById('info-btn').addEventListener('click', openModal);
+      document.getElementById('info-modal-close').addEventListener('click', closeModal);
+      document.getElementById('info-backdrop').addEventListener('click', closeModal);
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeModal(); });
+
+      /* ═══════════════════════════════════════════════════════════
+         HEX HOVER & CLICK INTERACTIONS
+         ═══════════════════════════════════════════════════════════ */
+
+      /* ── Highlight overlay ─────────────────────────────────── */
+      var hlSource = new ol.source.Vector();
+      var hlLayer  = new ol.layer.Vector({
+        source: hlSource,
+        style: new ol.style.Style({
+          stroke: new ol.style.Stroke({ color: 'rgba(255,255,255,0.9)', width: 2.5 }),
+          fill:   new ol.style.Fill({ color: 'rgba(255,255,255,0.06)' })
+        }),
+        zIndex: 998
+      });
+      map.addLayer(hlLayer);
+
+      var lastHlFeature = null;
+
+      function setHighlight(feature) {
+        if (feature === lastHlFeature) return;
+        hlSource.clear();
+        if (feature) hlSource.addFeature(feature);
+        lastHlFeature = feature;
+      }
+
+      /* ── Tooltip ───────────────────────────────────────────── */
+      var tooltip      = document.getElementById('hex-tooltip');
+      var mapContainer = document.getElementById('map-container');
+
+      function isVector(lyr) { return lyr instanceof ol.layer.Vector; }
+
+      function featureAtPixel(pixel, targetLayer) {
+        var found = null;
+        map.forEachFeatureAtPixel(pixel, function (f) { found = f; return true; }, {
+          layerFilter: function (l) { return l === targetLayer; }
+        });
+        return found;
+      }
+
+      function fmtTemp(v) {
+        if (v == null || isNaN(+v)) return '—';
+        return (+v).toFixed(1) + '°C';
+      }
+
+      function fmtNum(v, dp) {
+        if (v == null || isNaN(+v)) return '—';
+        return (+v).toFixed(dp != null ? dp : 2);
+      }
+
+      function buildTooltipHTML(feature, layer) {
+        var h = '';
+
+        if (layer === lyr_15072016ScaklkHaritas_5) {
+          var mean = feature.get('16_LST_mean');
+          var min_ = feature.get('16_LST_min');
+          var max_ = feature.get('16_LST_max');
+          h  = '<div class="tt-title">2016 — LST</div>';
+          h += '<div class="tt-val">' + fmtTemp(mean) + '</div>';
+          h += '<div class="tt-range">Min ' + fmtTemp(min_) + ' &nbsp;·&nbsp; Maks ' + fmtTemp(max_) + '</div>';
+        }
+        else if (layer === lyr_15072016ScaklkHaritas_6) {
+          var mean = feature.get('LST_mean');
+          var min_ = feature.get('LST_min');
+          var max_ = feature.get('LST_max');
+          h  = '<div class="tt-title">2025 — LST</div>';
+          h += '<div class="tt-val">' + fmtTemp(mean) + '</div>';
+          h += '<div class="tt-range">Min ' + fmtTemp(min_) + ' &nbsp;·&nbsp; Maks ' + fmtTemp(max_) + '</div>';
+        }
+        else if (layer === lyr_1507201616072026YllarndakiScaklkDeiimi_7) {
+          var mean = feature.get('LST_ort_dg');
+          var min_ = feature.get('LST_min_dg');
+          var max_ = feature.get('LST_max_dg');
+          var sign = (+mean) >= 0 ? '+' : '';
+          h  = '<div class="tt-title">2016 → 2025 &nbsp;LST Fark</div>';
+          h += '<div class="tt-val ' + ((+mean) < 0 ? 'neg' : 'pos') + '">' + sign + fmtTemp(mean) + '</div>';
+          h += '<div class="tt-range">Min ' + fmtTemp(min_) + ' &nbsp;·&nbsp; Maks ' + fmtTemp(max_) + '</div>';
+        }
+        else if (layer === lyr_GebzeSanayiAlanlar_8) {
+          var m16 = feature.get('16_LST_hex_mean');
+          var m25 = feature.get('25_LST_hex_mean');
+          h  = '<div class="tt-title">Sanayi Alanı</div>';
+          h += '<div class="tt-sep"></div>';
+          h += '<div class="tt-row"><span class="tt-row-lbl">LST 2016</span><span class="tt-row-val">' + fmtTemp(m16) + '</span></div>';
+          h += '<div class="tt-row"><span class="tt-row-lbl">LST 2025</span><span class="tt-row-val">' + fmtTemp(m25) + '</span></div>';
+        }
+
+        return h;
+      }
+
+      function positionTooltip(pixel) {
+        var x = pixel[0] + 14;
+        var y = pixel[1] + 14;
+        var cw = mapContainer.offsetWidth;
+        var ch = mapContainer.offsetHeight;
+        /* Force a reflow width estimate (tooltip hidden → use max-width guess) */
+        var tw = tooltip.offsetWidth  || 160;
+        var th = tooltip.offsetHeight || 70;
+        if (x + tw > cw - 8) x = pixel[0] - tw - 10;
+        if (y + th > ch - 8) y = pixel[1] - th - 10;
+        tooltip.style.left = x + 'px';
+        tooltip.style.top  = y + 'px';
+      }
+
+      /* ── pointermove handler ───────────────────────────────── */
+      map.on('pointermove', function (evt) {
+        if (evt.dragging) { tooltip.style.display = 'none'; setHighlight(null); return; }
+
+        var vecLayer    = isVector(currentLayer) ? currentLayer : null;
+        var feature     = vecLayer ? featureAtPixel(evt.pixel, vecLayer) : null;
+
+        /* Also check Sanayi if toggled on */
+        var sanayiFeature = null;
+        if (!feature && lyr_GebzeSanayiAlanlar_8.getVisible()) {
+          sanayiFeature = featureAtPixel(evt.pixel, lyr_GebzeSanayiAlanlar_8);
+        }
+
+        var activeFeature = feature || sanayiFeature;
+        var activeLayer   = feature ? vecLayer : (sanayiFeature ? lyr_GebzeSanayiAlanlar_8 : null);
+
+        if (activeFeature && activeLayer) {
+          tooltip.innerHTML = buildTooltipHTML(activeFeature, activeLayer);
+          tooltip.style.display = 'block';
+          positionTooltip(evt.pixel);
+          map.getTargetElement().style.cursor = 'pointer';
+          setHighlight(activeFeature);
+        } else {
+          tooltip.style.display = 'none';
+          map.getTargetElement().style.cursor = '';
+          setHighlight(null);
+        }
+      });
+
+      /* ── Detail panel ──────────────────────────────────────── */
+      var detailPanel   = document.getElementById('detail-panel');
+      var elBar2016     = document.getElementById('bar-2016');
+      var elVal2016     = document.getElementById('val-2016');
+      var elBar2025     = document.getElementById('bar-2025');
+      var elVal2025     = document.getElementById('val-2025');
+      var elDiffVal     = document.getElementById('diff-val');
+      var elDiffNote    = document.getElementById('diff-note');
+      var elCompareBars = document.getElementById('compare-bars');
+      var elRasterNote  = document.getElementById('raster-notice');
+
+      /* Global LST range for bar normalisation */
+      var LST_MIN = 15;
+      var LST_MAX = 50;
+
+      function normPct(v, lo, hi) {
+        return Math.min(100, Math.max(4, ((+v) - lo) / (hi - lo) * 100));
+      }
+
+      function showDetail(v2016, v2025) {
+        var hasData = v2016 != null || v2025 != null;
+
+        elRasterNote.classList.toggle('visible', !hasData);
+        elCompareBars.style.display = hasData ? '' : 'none';
+
+        if (v2016 != null) {
+          elBar2016.style.width = normPct(v2016, LST_MIN, LST_MAX) + '%';
+          elVal2016.textContent = fmtTemp(v2016);
+        } else {
+          elBar2016.style.width = '0%'; elVal2016.textContent = '—';
+        }
+
+        if (v2025 != null) {
+          elBar2025.style.width = normPct(v2025, LST_MIN, LST_MAX) + '%';
+          elVal2025.textContent = fmtTemp(v2025);
+        } else {
+          elBar2025.style.width = '0%'; elVal2025.textContent = '—';
+        }
+
+        if (v2016 != null && v2025 != null) {
+          var diff = (+v2025) - (+v2016);
+          var sign = diff >= 0 ? '+' : '';
+          elDiffVal.textContent = sign + diff.toFixed(1) + '°C';
+          elDiffVal.className = 'diff-val ' + (diff < 0 ? 'neg' : 'pos');
+          elDiffNote.textContent = diff < 0
+            ? '↓ Serin yönde değişim'
+            : '↑ Isınan bölge';
+        } else {
+          elDiffVal.textContent = '—'; elDiffVal.className = 'diff-val'; elDiffNote.textContent = '';
+        }
+
+        detailPanel.style.display = 'block';
+      }
+
+      function closeDetail() {
+        if (!detailPanel) return; /* guard: called before DOM vars assigned */
+        detailPanel.style.display = 'none';
+        elBar2016.style.width = '0%';
+        elBar2025.style.width = '0%';
+      }
+
+      document.getElementById('detail-close').addEventListener('click', closeDetail);
+
+      /* ── lock map center on pointerdown so singleclick 250ms delay can't drift ── */
+      var _preClickCenter = null;
+      map.on('pointerdown', function () {
+        _preClickCenter = map.getView().getCenter().slice();
+      });
+
+      /* ── singleclick handler ───────────────────────────────── */
+      map.on('singleclick', function (evt) {
+        if (_preClickCenter) {
+          map.getView().setCenter(_preClickCenter);
+          _preClickCenter = null;
+        }
+        tooltip.style.display = 'none';
+
+        var coord = evt.coordinate;
+
+        /* Raster layer → no feature lookup possible */
+        if (!isVector(currentLayer)) {
+          elRasterNote.classList.add('visible');
+          elCompareBars.style.display = 'none';
+          elDiffVal.textContent = '—'; elDiffNote.textContent = '';
+          detailPanel.style.display = 'block';
+          var sbR = document.getElementById('sidebar-body');
+          sbR.scrollTop = sbR.scrollHeight;
+          return;
+        }
+
+        /* Coordinate-based lookup (more reliable than pixel hit-test) */
+        var clickedF = currentLayer.getSource().getFeaturesAtCoordinate(coord)[0] || null;
+
+        var sanayiF = null;
+        if (!clickedF && lyr_GebzeSanayiAlanlar_8.getVisible()) {
+          sanayiF = lyr_GebzeSanayiAlanlar_8.getSource().getFeaturesAtCoordinate(coord)[0] || null;
+        }
+
+        var activeF = clickedF || sanayiF;
+
+        if (!activeF) { closeDetail(); return; }
+
+        /* Cross-year LST lookup — both years embedded in fark layer */
+        var srcFark = lyr_1507201616072026YllarndakiScaklkDeiimi_7.getSource();
+        var fFark   = srcFark.getFeaturesAtCoordinate(coord)[0];
+
+        var v2016, v2025;
+        if (sanayiF && !clickedF) {
+          v2016 = sanayiF.get('16_LST_hex_mean');
+          v2025 = sanayiF.get('25_LST_hex_mean');
+        } else {
+          v2016 = fFark ? fFark.get('LST_16_ort') : null;
+          v2025 = fFark ? fFark.get('LST_25_ort') : null;
+        }
+
+        showDetail(v2016, v2025);
+      });
+
+
+    })();
+    </script>
+
+  </body>
+</html>
