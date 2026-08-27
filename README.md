@@ -4,6 +4,8 @@
 
 Bu proje, hızla sanayileşen kentsel alanlarda yüzey sıcaklığının (LST) zaman içinde nasıl değiştiğini ve bu değişimin sanayileşmeyle ilişkisini mekânsal olarak incelemeyi amaçlayan bir CBS (Coğrafi Bilgi Sistemleri) çalışmasıdır. Çalışma alanı olarak Türkiye'nin en yoğun sanayi ilçelerinden biri olan **Gebze (Kocaeli)** seçilmiştir.
 
+🔗 Canlı harita: https://yusufesen1.github.io/kocaeli_lst/
+
 ---
 
 ## Projenin Amacı
